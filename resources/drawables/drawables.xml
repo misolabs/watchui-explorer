@@ -1,15 +1,28 @@
 <drawables>
     <bitmap id="LauncherIcon" filename="launcher-icon.svg"/>
     <bitmap
-        id="RotaryHeartMonitor"
-        filename="rotary/monitor_heart_36dp_FFFFFF_FILL0_wght400_GRAD0_opsz40.svg"
-        scaleX="200%"
-        scaleY="200%"
-        scaleRelativeTo="image"/>
+        id="RotaryMonitor"
+        filename="rotary/monitor.svg"
+        scaleX="80"
+        scaleY="80"/>
+    <bitmap
+        id="RotaryHistory"
+        filename="rotary/history.svg"
+        scaleX="80"
+        scaleY="80"/>
+    <bitmap
+        id="RotaryResonance"
+        filename="rotary/resonance.svg"
+        scaleX="80"
+        scaleY="80"/>
+    <bitmap
+        id="RotaryStartSession"
+        filename="rotary/start_session.svg"
+        scaleX="80"
+        scaleY="80"/>
     <bitmap
         id="RotarySettings"
-        filename="rotary/settings_36dp_FFFFFF_FILL0_wght400_GRAD0_opsz40.svg"
-        scaleX="200%"
-        scaleY="200%"
-        scaleRelativeTo="image"/>
+        filename="rotary/settings.svg"
+        scaleX="80"
+        scaleY="80"/>
 </drawables>

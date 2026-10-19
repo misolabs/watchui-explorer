@@ -1,6 +1,8 @@
+import Toybox.Attention;
 import Toybox.Graphics;
 import Toybox.Lang;
 import Toybox.Math;
+import Toybox.System;
 import Toybox.Timer;
 import Toybox.WatchUi;
 
@@ -64,15 +66,27 @@ class CircularMenuView extends WatchUi.View {
     private const SELECTION_PADDING = 7;
     private const ANIMATION_FRAME_COUNT = 5;
     private const ANIMATION_FRAME_MS = 50;
+    private const HAPTIC_DUTY_CYCLE = 20;
+    private const HAPTIC_DURATION_MS = 35;
+    private const HAPTIC_DEBOUNCE_MS = 80;
+    private const MIN_DRAG_RADIUS = 48;
 
     private var _entries as Array<CircularMenuEntry>;
     private var _selectedIndex as Number = 0;
     private var _maxVisible as Number;
     private var _style as CircularMenuStyle;
-    private var _animationDelta as Number = 0;
+    private var _animationSelectionDelta as Number = 0;
     private var _animationFrame as Number = 0;
+    private var _animationStartRotation as Float = 0.0;
+    private var _animationTargetRotation as Float = 0.0;
     private var _animationTimer as Timer.Timer?;
+    private var _rotation as Float = 0.0;
     private var _pendingDelta as Number = 0;
+    private var _dragging as Boolean = false;
+    private var _lastDragAngle as Float = 0.0;
+    private var _lastHapticTime as Number = 0;
+    private var _centerX as Number = 0;
+    private var _centerY as Number = 0;
 
     public function initialize(
         entries as Array<CircularMenuEntry>,
@@ -111,11 +125,76 @@ class CircularMenuView extends WatchUi.View {
         startAnimation(delta);
     }
 
+    public function onRotaryDrag(x as Number, y as Number) as Void {
+        if (_entries.size() == 0 || _animationTimer != null) {
+            return;
+        }
+
+        var offsetX = x - _centerX;
+        var offsetY = y - _centerY;
+        if (
+            (offsetX * offsetX) + (offsetY * offsetY)
+            < MIN_DRAG_RADIUS * MIN_DRAG_RADIUS
+        ) {
+            return;
+        }
+
+        var angle = Math.atan2(offsetY, offsetX).toFloat();
+        if (!_dragging) {
+            _dragging = true;
+            _lastDragAngle = angle;
+            return;
+        }
+
+        var delta = angle - _lastDragAngle;
+        if (delta > Math.PI) {
+            delta -= Math.PI * 2.0;
+        } else if (delta < -Math.PI) {
+            delta += Math.PI * 2.0;
+        }
+
+        _lastDragAngle = angle;
+        var previousRotation = _rotation;
+        _rotation += delta;
+        if (crossedSlotBoundary(previousRotation, _rotation)) {
+            playDetentHaptic();
+        }
+
+        WatchUi.requestUpdate();
+    }
+
+    public function beginRotaryDrag(x as Number, y as Number) as Void {
+        _dragging = false;
+        onRotaryDrag(x, y);
+    }
+
+    public function endRotaryDrag() as Void {
+        if (!_dragging) {
+            return;
+        }
+
+        _dragging = false;
+        var angleStep = getAngleStep();
+        var selectionDelta = 0;
+        var remainingRotation = _rotation;
+        while (remainingRotation >= angleStep / 2.0) {
+            selectionDelta--;
+            remainingRotation -= angleStep;
+        }
+        while (remainingRotation <= -angleStep / 2.0) {
+            selectionDelta++;
+            remainingRotation += angleStep;
+        }
+
+        startAnimation(selectionDelta);
+    }
+
     public function onHide() as Void {
         if (_animationTimer != null) {
             (_animationTimer as Timer.Timer).stop();
             _animationTimer = null;
         }
+        _dragging = false;
     }
 
     public function onUpdate(dc as Dc) as Void {
@@ -138,18 +217,15 @@ class CircularMenuView extends WatchUi.View {
 
         var centerX = dc.getWidth() / 2;
         var centerY = dc.getHeight() / 2;
+        _centerX = centerX;
+        _centerY = centerY;
         var radius = (dc.getWidth() / 2) - (ICON_SIZE / 2) - EDGE_MARGIN;
         var visibleCount = _entries.size() < _maxVisible
             ? _entries.size()
             : _maxVisible;
         var firstOffset = -(visibleCount / 2);
         var selectedAngle = -Math.PI / 6.0;
-        var hasOverflow = _entries.size() > visibleCount;
-        var angleDivisions = hasOverflow ? visibleCount + 1 : visibleCount;
-        var angleStep = (Math.PI * 2.0) / angleDivisions;
-        var progress = _animationFrame.toFloat() / ANIMATION_FRAME_COUNT;
-        var easedProgress = progress * progress * (3.0 - (2.0 * progress));
-        var rotation = -_animationDelta * angleStep * easedProgress;
+        var angleStep = getAngleStep();
 
         dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
         dc.setPenWidth(2);
@@ -167,7 +243,7 @@ class CircularMenuView extends WatchUi.View {
         for (var slot = 0; slot < visibleCount; slot++) {
             var offset = firstOffset + slot;
             var entryIndex = (_selectedIndex + offset + _entries.size()) % _entries.size();
-            var angle = selectedAngle + (offset * angleStep) + rotation;
+            var angle = selectedAngle + (offset * angleStep) + _rotation;
             var iconX = centerX + (Math.cos(angle) * radius);
             var iconY = centerY + (Math.sin(angle) * radius);
 
@@ -209,7 +285,10 @@ class CircularMenuView extends WatchUi.View {
     }
 
     private function startAnimation(delta as Number) as Void {
-        _animationDelta = delta < 0 ? -1 : 1;
+        var angleStep = getAngleStep();
+        _animationSelectionDelta = delta;
+        _animationStartRotation = _rotation;
+        _animationTargetRotation = -delta * angleStep;
         _animationFrame = 0;
         _animationTimer = new Timer.Timer();
         (_animationTimer as Timer.Timer).start(
@@ -220,8 +299,54 @@ class CircularMenuView extends WatchUi.View {
         WatchUi.requestUpdate();
     }
 
+    private function getAngleStep() as Float {
+        var visibleCount = _entries.size() < _maxVisible
+            ? _entries.size()
+            : _maxVisible;
+        var hasOverflow = _entries.size() > visibleCount;
+        var angleDivisions = hasOverflow ? visibleCount + 1 : visibleCount;
+        return ((Math.PI * 2.0) / angleDivisions).toFloat();
+    }
+
+    private function crossedSlotBoundary(
+        previousRotation as Float,
+        currentRotation as Float
+    ) as Boolean {
+        var angleStep = getAngleStep();
+        if (currentRotation > previousRotation) {
+            return Math.floor(previousRotation / angleStep)
+                != Math.floor(currentRotation / angleStep);
+        }
+        if (currentRotation < previousRotation) {
+            return Math.ceil(previousRotation / angleStep)
+                != Math.ceil(currentRotation / angleStep);
+        }
+        return false;
+    }
+
+    private function playDetentHaptic() as Void {
+        var now = System.getTimer();
+        if (now - _lastHapticTime < HAPTIC_DEBOUNCE_MS) {
+            return;
+        }
+
+        _lastHapticTime = now;
+        Attention.vibrate([
+            new Attention.VibeProfile(
+                HAPTIC_DUTY_CYCLE,
+                HAPTIC_DURATION_MS
+            )
+        ]);
+    }
+
     public function onAnimationFrame() as Void {
         _animationFrame++;
+        var progress = _animationFrame.toFloat() / ANIMATION_FRAME_COUNT;
+        var easedProgress = progress * progress * (3.0 - (2.0 * progress));
+        _rotation = _animationStartRotation + (
+            (_animationTargetRotation - _animationStartRotation)
+            * easedProgress
+        );
 
         if (_animationFrame < ANIMATION_FRAME_COUNT) {
             WatchUi.requestUpdate();
@@ -230,11 +355,15 @@ class CircularMenuView extends WatchUi.View {
 
         (_animationTimer as Timer.Timer).stop();
         _animationTimer = null;
+        var selectionOffset = (
+            _animationSelectionDelta % _entries.size()
+        ) + _entries.size();
         _selectedIndex = (
-            _selectedIndex + _animationDelta + _entries.size()
+            _selectedIndex + selectionOffset
         ) % _entries.size();
-        _animationDelta = 0;
+        _animationSelectionDelta = 0;
         _animationFrame = 0;
+        _rotation = 0.0;
 
         if (_pendingDelta != 0) {
             var nextDelta = _pendingDelta < 0 ? -1 : 1;
@@ -280,6 +409,26 @@ class CircularMenuDelegate extends WatchUi.BehaviorDelegate {
         if (entry != null) {
             _onSelect.invoke(entry, _view.getSelectedIndex());
         }
+        return true;
+    }
+
+    public function onDrag(event as WatchUi.DragEvent) as Boolean {
+        var dragType = event.getType();
+        if (dragType == WatchUi.DRAG_TYPE_STOP) {
+            _view.endRotaryDrag();
+        } else {
+            var coordinates = event.getCoordinates();
+            if (dragType == WatchUi.DRAG_TYPE_START) {
+                _view.beginRotaryDrag(coordinates[0], coordinates[1]);
+            } else {
+                _view.onRotaryDrag(coordinates[0], coordinates[1]);
+            }
+        }
+        return true;
+    }
+
+    public function onRelease(event as WatchUi.ClickEvent) as Boolean {
+        _view.endRotaryDrag();
         return true;
     }
 

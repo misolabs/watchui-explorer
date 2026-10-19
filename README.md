@@ -48,4 +48,7 @@ label and any `WatchUi.Drawable`. Its delegate keeps the selected entry near
 the START button, animates clockwise or counterclockwise through entries with
 UP/DOWN, and invokes a callback when START is pressed. Set `maxVisible` to
 control the rotating window size. `CircularMenuStyle` configures the
-background, `drawBitmap2` icon tint, selection ring, and center-label colors.
+background, `drawBitmap2` icon tint, selection marker, and center-label colors.
+Circular touchscreen drags rotate the entries directly; releasing snaps the
+menu to the nearest slot. A subtle haptic detent fires whenever an icon crosses
+the selection marker during direct touch rotation.
