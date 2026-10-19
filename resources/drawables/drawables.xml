@@ -1,0 +1,15 @@
+<drawables>
+    <bitmap id="LauncherIcon" filename="launcher-icon.svg"/>
+    <bitmap
+        id="RotaryHeartMonitor"
+        filename="rotary/monitor_heart_36dp_FFFFFF_FILL0_wght400_GRAD0_opsz40.svg"
+        scaleX="200%"
+        scaleY="200%"
+        scaleRelativeTo="image"/>
+    <bitmap
+        id="RotarySettings"
+        filename="rotary/settings_36dp_FFFFFF_FILL0_wght400_GRAD0_opsz40.svg"
+        scaleX="200%"
+        scaleY="200%"
+        scaleRelativeTo="image"/>
+</drawables>

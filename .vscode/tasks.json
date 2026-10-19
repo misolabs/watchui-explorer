@@ -1,0 +1,36 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Connect IQ: Build FR165",
+            "type": "shell",
+            "command": "${workspaceFolder}/scripts/build.sh",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Connect IQ: Build FR165 Music",
+            "type": "shell",
+            "command": "${workspaceFolder}/scripts/build.sh",
+            "args": ["fr165m"],
+            "problemMatcher": []
+        },
+        {
+            "label": "Connect IQ: Run/Reload FR165 Simulator",
+            "type": "shell",
+            "command": "${workspaceFolder}/scripts/simulate.sh",
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "Connect IQ: Run/Reload FR165 Music Simulator",
+            "type": "shell",
+            "command": "${workspaceFolder}/scripts/simulate.sh",
+            "args": ["fr165m"],
+            "problemMatcher": []
+        }
+    ]
+}
